@@ -1,16 +1,16 @@
 // ====== CONFIG ======
 const SPREADSHEET_ID = "17isMrQuxVMbFjsL8sIiB6iwm3xRTr-4gELPxZmPeOTQ";
-const GID = "0"; // change if your data tab has a different gid
+const GID = "0";
 
 const URLS = [
   `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`,
   `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=${GID}`,
 ];
 
-let allData = [];
-let filteredData = [];
+let allData = [];           // raw rows from sheet
+let aggregatedData = [];    // one row per date (after filter + grouping)
 
-// ====== HELPERS (null-safe) ======
+// ====== HELPERS ======
 const $ = (id) => document.getElementById(id);
 const setText = (id, txt) => { const el = $(id); if (el) el.textContent = txt; };
 const setStatus = (t) => setText("status", t);
@@ -51,6 +51,8 @@ function parseDate(s) {
   const d = new Date(t);
   return isNaN(d) ? null : d;
 }
+const fmtDate = (d) => d ? `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}` : "";
+const dateKey = (d) => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` : "";
 
 // ====== CSV PARSER ======
 function parseCsv(str) {
@@ -91,17 +93,6 @@ async function loadData() {
       if (txt.trim().startsWith("<")) throw new Error("Got HTML — sheet not public");
       const parsed = parseCsv(txt);
       if (!parsed.length) throw new Error("Empty CSV");
-
-      // Sort ascending by date
-      parsed.sort((a, b) => {
-        const da = parseDate(getCol(a, "Date"));
-        const db = parseDate(getCol(b, "Date"));
-        if (!da && !db) return 0;
-        if (!da) return 1;
-        if (!db) return -1;
-        return da - db;
-      });
-
       allData = parsed;
       console.log(`✅ ${parsed.length} rows. Headers:`, Object.keys(parsed[0]));
       setStatus(`✅ ${parsed.length} rows loaded`);
@@ -117,7 +108,7 @@ async function loadData() {
   alert("Cannot load data. Make sure sheet is shared 'Anyone with the link → Viewer'.");
 }
 
-// ====== FILTERS (4 filters kept: SBU, Shop Floor, Mill Name, Date range) ======
+// ====== FILTERS ======
 function uniqueValues(...names) {
   const set = new Set();
   allData.forEach(r => {
@@ -126,7 +117,6 @@ function uniqueValues(...names) {
   });
   return [...set].sort();
 }
-
 function fillSelect(id, values) {
   const sel = $(id); if (!sel) return;
   const cur = sel.value;
@@ -134,7 +124,6 @@ function fillSelect(id, values) {
     values.map(v => `<option value="${v}">${v}</option>`).join("");
   sel.value = cur;
 }
-
 function initFilters() {
   const sbuVals = uniqueValues("SBU");
   const sbuField = $("sbuField");
@@ -145,6 +134,7 @@ function initFilters() {
   fillSelect("filterMachine", uniqueValues("Mill Name", "Machine", "Machine Name"));
 }
 
+// ====== APPLY FILTERS + AGGREGATE BY DATE ======
 function applyFilters() {
   const sbu = $("filterSBU")?.value || "";
   const shop = $("filterShop")?.value || "";
@@ -153,7 +143,8 @@ function applyFilters() {
   const to = parseDate($("toDate")?.value);
   if (to) to.setHours(23, 59, 59, 999);
 
-  filteredData = allData.filter(r => {
+  // Step 1: Filter raw rows
+  const filtered = allData.filter(r => {
     if (sbu && getCol(r, "SBU") !== sbu) return false;
     const shopVal = getCol(r, "Shop Floor") || getCol(r, "Product Criteria");
     if (shop && shopVal !== shop) return false;
@@ -161,8 +152,66 @@ function applyFilters() {
     const d = parseDate(getCol(r, "Date"));
     if (from && (!d || d < from)) return false;
     if (to && (!d || d > to)) return false;
-    return true;
+    return d !== null; // skip rows with no valid date
   });
+
+  // Step 2: Group by date — key = YYYY-MM-DD so same date never repeats
+  const groups = new Map();
+  filtered.forEach(r => {
+    const d = parseDate(getCol(r, "Date"));
+    const key = dateKey(d);
+    if (!groups.has(key)) {
+      groups.set(key, {
+        dateObj: d,
+        sumTgt: 0, sumActual: 0, sumGood: 0,
+        wWastage: 0, wOee: 0, wNpt: 0, // weighted by actual output
+        wTotal: 0,                      // sum of weights (= sum actual)
+        // fallback simple averages if actual = 0
+        sWastage: 0, sOee: 0, sNpt: 0, sCount: 0,
+      });
+    }
+    const g = groups.get(key);
+    const tgt = num(getCol(r, "Shift Target (MT)", "Shift Target", "TGT O/P"));
+    const act = num(getCol(r, "Actual Output (MT)", "Actual Output", "ACTUAL O/P"));
+    const good = num(getCol(r, "Good Production"));
+    const wastage = num(getCol(r, "Wastage%", "Wastage"));
+    const oee = num(getCol(r, "OEE%", "OEE"));
+    const npt = num(getCol(r, "NPT%", "NPT"));
+
+    g.sumTgt += tgt;
+    g.sumActual += act;
+    g.sumGood += good;
+
+    if (act > 0) {
+      g.wWastage += wastage * act;
+      g.wOee += oee * act;
+      g.wNpt += npt * act;
+      g.wTotal += act;
+    }
+    // also keep simple counts as fallback
+    g.sWastage += wastage; g.sOee += oee; g.sNpt += npt; g.sCount++;
+  });
+
+  // Step 3: Build one row per date with computed values
+  aggregatedData = [...groups.values()]
+    .sort((a, b) => a.dateObj - b.dateObj)
+    .map(g => {
+      const achiv = g.sumActual > 0 ? (g.sumGood / g.sumActual) * 100 : 0;
+      const wastagePct = g.wTotal > 0 ? g.wWastage / g.wTotal : (g.sCount ? g.sWastage / g.sCount : 0);
+      const oeePct     = g.wTotal > 0 ? g.wOee     / g.wTotal : (g.sCount ? g.sOee     / g.sCount : 0);
+      const nptPct     = g.wTotal > 0 ? g.wNpt     / g.wTotal : (g.sCount ? g.sNpt     / g.sCount : 0);
+      return {
+        date: fmtDate(g.dateObj),
+        dateObj: g.dateObj,
+        tgt: g.sumTgt,
+        actual: g.sumActual,
+        good: g.sumGood,
+        achiv,
+        wastage: wastagePct,
+        oee: oeePct,
+        npt: nptPct,
+      };
+    });
 
   renderCards();
   renderTable();
@@ -171,78 +220,69 @@ function applyFilters() {
 // ====== RENDER CARDS ======
 function renderCards() {
   let totalTgt = 0, totalActual = 0, totalGood = 0;
-  let sumAchiv = 0, nAchiv = 0, sumOee = 0, nOee = 0, sumNpt = 0, nNpt = 0;
+  let sumAchiv = 0, nAchiv = 0;
+  let wOee = 0, wNpt = 0, wTot = 0;
+  let sOee = 0, sNpt = 0, sCnt = 0;
 
-  filteredData.forEach(r => {
-    const tgt = num(getCol(r, "Shift Target (MT)", "Shift Target", "TGT O/P"));
-    const act = num(getCol(r, "Actual Output (MT)", "Actual Output", "ACTUAL O/P"));
-    const good = num(getCol(r, "Good Production"));
-    totalTgt += tgt; totalActual += act; totalGood += good;
-    if (act > 0) { sumAchiv += (good / act) * 100; nAchiv++; }
-    const oee = num(getCol(r, "OEE%", "OEE")); if (oee > 0) { sumOee += oee; nOee++; }
-    const nptRaw = getCol(r, "NPT%", "NPT"); if (nptRaw !== "") { sumNpt += num(nptRaw); nNpt++; }
+  aggregatedData.forEach(d => {
+    totalTgt += d.tgt;
+    totalActual += d.actual;
+    totalGood += d.good;
+    if (d.actual > 0) { sumAchiv += d.achiv; nAchiv++; }
+    if (d.actual > 0) { wOee += d.oee * d.actual; wNpt += d.npt * d.actual; wTot += d.actual; }
+    sOee += d.oee; sNpt += d.npt; sCnt++;
   });
 
   setText("cTgt", fmt(totalTgt));
   setText("cActual", fmt(totalActual));
   setText("cGood", fmt(totalGood));
-  setText("cAchiv", pct(nAchiv ? sumAchiv / nAchiv : 0));
-  setText("cOee", pct(nOee ? sumOee / nOee : 0));
-  setText("cNpt", pct(nNpt ? sumNpt / nNpt : 0));
-  setText("cCount", filteredData.length.toLocaleString());
+  setText("cAchiv", pct(totalActual > 0 ? (totalGood / totalActual) * 100 : 0));
+  setText("cOee", pct(wTot > 0 ? wOee / wTot : (sCnt ? sOee / sCnt : 0)));
+  setText("cNpt", pct(wTot > 0 ? wNpt / wTot : (sCnt ? sNpt / sCnt : 0)));
+  setText("cCount", aggregatedData.length.toLocaleString());
 }
 
-// ====== RENDER TABLE — 8 COLUMNS ONLY (matches your screenshot) ======
+// ====== RENDER TABLE — one row per UNIQUE date ======
 function renderTable() {
   const table = $("dataTable"); if (!table) return;
   const tbody = table.querySelector("tbody"); if (!tbody) return;
 
-  if (!filteredData.length) {
+  if (!aggregatedData.length) {
     tbody.innerHTML = `<tr><td colspan="8" style="padding:30px;color:#9ca3af;text-align:center;">No data for selected filters</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = filteredData.map(r => {
-    const dateStr = getCol(r, "Date");
-    const tgt = num(getCol(r, "Shift Target (MT)", "Shift Target", "TGT O/P"));
-    const act = num(getCol(r, "Actual Output (MT)", "Actual Output", "ACTUAL O/P"));
-    const good = num(getCol(r, "Good Production"));
-    const achiv = act > 0 ? (good / act) * 100 : 0; // ✅ G/F formula
-    return `<tr>
-      <td>${dateStr || ""}</td>
-      <td>${tgt ? fmt2(tgt) : ""}</td>
-      <td>${act ? fmt(act) : ""}</td>
-      <td>${good ? fmt(good) : ""}</td>
-      <td>${act > 0 ? achiv.toFixed(2) + "%" : ""}</td>
-      <td>${getCol(r, "Wastage%", "Wastage") || ""}</td>
-      <td>${getCol(r, "OEE%", "OEE") || ""}</td>
-      <td>${getCol(r, "NPT%", "NPT") || ""}</td>
-    </tr>`;
-  }).join("");
+  tbody.innerHTML = aggregatedData.map(d => `
+    <tr>
+      <td>${d.date}</td>
+      <td>${fmt2(d.tgt)}</td>
+      <td>${fmt(d.actual)}</td>
+      <td>${fmt(d.good)}</td>
+      <td>${d.actual > 0 ? d.achiv.toFixed(2) + "%" : ""}</td>
+      <td>${d.wastage ? d.wastage.toFixed(2) + "%" : ""}</td>
+      <td>${d.oee ? d.oee.toFixed(2) + "%" : ""}</td>
+      <td>${d.npt ? d.npt.toFixed(2) + "%" : ""}</td>
+    </tr>
+  `).join("");
 }
 
-// ====== EXCEL EXPORT (8 columns to match table) ======
+// ====== EXCEL EXPORT (aggregated data) ======
 function exportExcel() {
-  if (!filteredData.length) { alert("No data to export!"); return; }
+  if (!aggregatedData.length) { alert("No data to export!"); return; }
 
   const headers = ["Date", "Shift Target (MT)", "Actual Output (MT)", "Good Production",
     "Achiv%", "Wastage%", "OEE%", "NPT%"];
 
-  const rows = filteredData.map(r => {
-    const act = num(getCol(r, "Actual Output (MT)", "ACTUAL O/P"));
-    const good = num(getCol(r, "Good Production"));
-    const achiv = act > 0 ? ((good / act) * 100).toFixed(2) + "%" : "";
-    return [
-      getCol(r, "Date"),
-      getCol(r, "Shift Target (MT)", "Shift Target"),
-      getCol(r, "Actual Output (MT)", "Actual Output"),
-      getCol(r, "Good Production"),
-      achiv,
-      getCol(r, "Wastage%"),
-      getCol(r, "OEE%"),
-      getCol(r, "NPT%"),
-    ];
-  });
+  const rows = aggregatedData.map(d => [
+    d.date,
+    d.tgt.toFixed(2),
+    d.actual.toFixed(0),
+    d.good.toFixed(0),
+    d.actual > 0 ? d.achiv.toFixed(2) + "%" : "",
+    d.wastage ? d.wastage.toFixed(2) + "%" : "",
+    d.oee ? d.oee.toFixed(2) + "%" : "",
+    d.npt ? d.npt.toFixed(2) + "%" : "",
+  ]);
 
   const html = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
