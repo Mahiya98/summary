@@ -37,11 +37,32 @@
       .back-to-hub { top: 8px; left: 8px; padding: 6px 14px; font-size: 12px; }
       body { padding-top: 46px !important; }
     }
+
+    /* 🔧 Breakdown Button (orange gradient — matches breakdown dashboard theme) */
+    .btn-breakdown {
+      padding: 9px 16px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff !important;
+      font-size: 14px;
+      background: linear-gradient(135deg, #f97316, #c2410c);
+      text-decoration: none !important;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: transform .2s, opacity .2s;
+    }
+    .btn-breakdown:hover {
+      opacity: .9;
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
 
-  <!-- 🏠 Back to Hub Button — UPDATED URL -->
+  <!-- 🏠 Back to Hub Button -->
   <a href="https://mahiya98.github.io/Dashboard/" class="back-to-hub" title="Back to Dashboard Hub">
     ← Back to Hub
   </a>
@@ -76,6 +97,10 @@
     <div class="actions">
       <button id="resetBtn" class="btn btn-grey">⟳ Reset</button>
       <button id="excelBtn" class="btn btn-green">⬇ Excel</button>
+      <!-- 🔧 NEW Breakdown Button -->
+      <a href="https://mahiya98.github.io/erp-breakdown/" class="btn-breakdown" title="Open Breakdown Report">
+        🔧 Breakdown
+      </a>
     </div>
   </section>
 
