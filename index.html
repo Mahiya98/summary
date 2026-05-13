@@ -12,7 +12,7 @@
     <span id="status" class="status">Loading…</span>
   </header>
 
-  <!-- 4 FILTERS + DATE RANGE -->
+  <!-- 4 FILTERS + DATE RANGE (unchanged) -->
   <section class="filters">
     <div class="field" id="sbuField">
       <label>SBU</label>
@@ -51,14 +51,19 @@
     <div class="card"><div class="card-label">Records</div><div class="card-value" id="cCount">0</div></div>
   </section>
 
-  <!-- DATA TABLE — one row per date, each column shows that date's data -->
+  <!-- DATA TABLE — 8 COLUMNS (matches your screenshot exactly) -->
   <section class="table-wrap">
     <table id="dataTable">
       <thead>
         <tr>
-          <th>DATE</th><th>PRODUCT CRITERIA</th><th>SHIFT</th><th>MILL NAME</th>
-          <th>TGT O/P</th><th>ACTUAL O/P</th><th>GOOD PRODUCTION</th>
-          <th>ACHIV%</th><th>WASTAGE%</th><th>OEE%</th><th>NPT%</th>
+          <th>Date</th>
+          <th>Shift Target (MT)</th>
+          <th>Actual Output (MT)</th>
+          <th>Good Production</th>
+          <th>Achiv%</th>
+          <th>Wastage%</th>
+          <th>OEE%</th>
+          <th>NPT%</th>
         </tr>
       </thead>
       <tbody></tbody>
