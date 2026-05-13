@@ -1,5 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
+  <style>
+  /* 🏠 Back to Hub Button */
+  .back-to-hub {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 9999;
+    background: linear-gradient(135deg, #1e3a8a, #2563eb);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 30px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .back-to-hub:hover {
+    transform: translateX(-3px);
+    box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    background: linear-gradient(135deg, #2563eb, #06b6d4);
+  }
+  body { padding-top: 50px !important; }
+  @media (max-width: 600px) {
+    .back-to-hub { top: 8px; left: 8px; padding: 6px 14px; font-size: 12px; }
+    body { padding-top: 44px !important; }
+  }
+</style>
+
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
