@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Production Dashboard</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>📊 Production Dashboard</h1>
+    <span id="status" class="status">Loading…</span>
+  </header>
+
+  <!-- 4 FILTERS + DATE RANGE -->
+  <section class="filters">
+    <div class="field" id="sbuField">
+      <label>SBU</label>
+      <select id="filterSBU"><option value="">Select All</option></select>
+    </div>
+    <div class="field">
+      <label>Shop Floor</label>
+      <select id="filterShop"><option value="">Select All</option></select>
+    </div>
+    <div class="field">
+      <label>Mill Name</label>
+      <select id="filterMachine"><option value="">Select All</option></select>
+    </div>
+    <div class="field">
+      <label>From Date</label>
+      <input type="date" id="fromDate" />
+    </div>
+    <div class="field">
+      <label>To Date</label>
+      <input type="date" id="toDate" />
+    </div>
+    <div class="actions">
+      <button id="resetBtn" class="btn btn-grey">⟳ Reset</button>
+      <button id="excelBtn" class="btn btn-green">⬇ Excel</button>
+    </div>
+  </section>
+
+  <!-- SUMMARY CARDS -->
+  <section class="cards">
+    <div class="card"><div class="card-label">Total TGT O/P</div><div class="card-value" id="cTgt">0</div></div>
+    <div class="card"><div class="card-label">Total Actual O/P</div><div class="card-value" id="cActual">0</div></div>
+    <div class="card"><div class="card-label">Good Production</div><div class="card-value" id="cGood">0</div></div>
+    <div class="card"><div class="card-label">Avg Achiv %</div><div class="card-value" id="cAchiv">0.0%</div></div>
+    <div class="card"><div class="card-label">Avg OEE %</div><div class="card-value" id="cOee">0.0%</div></div>
+    <div class="card"><div class="card-label">Avg NPT %</div><div class="card-value" id="cNpt">0.0%</div></div>
+    <div class="card"><div class="card-label">Records</div><div class="card-value" id="cCount">0</div></div>
+  </section>
+
+  <!-- DATA TABLE — one row per date, each column shows that date's data -->
+  <section class="table-wrap">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>DATE</th><th>PRODUCT CRITERIA</th><th>SHIFT</th><th>MILL NAME</th>
+          <th>TGT O/P</th><th>ACTUAL O/P</th><th>GOOD PRODUCTION</th>
+          <th>ACHIV%</th><th>WASTAGE%</th><th>OEE%</th><th>NPT%</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
